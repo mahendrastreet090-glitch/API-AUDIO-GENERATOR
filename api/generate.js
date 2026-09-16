@@ -1,4 +1,4 @@
-const { EdgeTTS } = require('edge-tts');
+const { MsEdgeTTS, OUTPUT_FORMAT } = require('ms-edge-tts');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -29,7 +29,7 @@ module.exports = async function handler(req, res) {
 Ubah teks input berikut agar mengekspresikan vibe "${vibe}".
 Tambahkan tanda baca (titik, koma, tanda seru, titik-titik untuk jeda) agar pembacaan audio pas.
 Aturan Vibe:
-- ceria: nada dinamis, kalimat santai, gunakan tanda seru (!).
+- ceria: nada dinamis, gunakan tanda seru (!).
 - sedih: lambat, melankolis, gunakan banyak titik/koma untuk jeda napas.
 - puitis: estetis, gunakan jeda titik-titik (...).
 - misterius: berat, datar, gunakan jeda panjang.
@@ -56,8 +56,7 @@ Teks Asli: ${text}`;
       }
     }
 
-    // 2. Pemilihan Suara Berdasarkan Gender
-    // id-ID-ArdiNeural (Pria) | id-ID-GadisNeural (Wanita)
+    // 2. Pemilihan Suara (Pria / Wanita)
     const voice = gender === 'pria' ? 'id-ID-ArdiNeural' : 'id-ID-GadisNeural';
 
     // 3. Penyesuaian Pitch Berdasarkan Vibe
@@ -66,19 +65,20 @@ Teks Asli: ${text}`;
     if (vibe === 'ceria') pitch = '+6Hz';
     if (vibe === 'sedih') pitch = '-4Hz';
 
-    // Format Kecepatan untuk Edge TTS (misal: +0%, -20%, +30%)
     const speedPercent = Math.round((parseFloat(speed) - 1) * 100);
     const rate = `${speedPercent >= 0 ? '+' : ''}${speedPercent}%`;
 
-    // 4. Proses Generasi Audio via Edge TTS
-    const tts = new EdgeTTS({
-      voice: voice,
-      lang: 'id-ID',
-      outputFormat: 'audio-24khz-48kbitrate-mono-mp3'
-    });
+    // 4. Synthesize Audio Menggunakan ms-edge-tts
+    const tts = new MsEdgeTTS();
+    await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
 
-    await tts.synthesize(optimizedText, voice, { rate, pitch });
-    const audioBuffer = await tts.toBuffer();
+    const stream = tts.toStream(optimizedText, { rate, pitch });
+
+    const chunks = [];
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+    const audioBuffer = Buffer.concat(chunks);
     const base64Audio = audioBuffer.toString('base64');
 
     return res.status(200).json({
