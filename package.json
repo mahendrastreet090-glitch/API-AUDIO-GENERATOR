@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "edge-tts": "^1.0.3"
+    "ms-edge-tts": "latest"
   }
 }
