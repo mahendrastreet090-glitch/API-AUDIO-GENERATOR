@@ -1,7 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { getAudioUrl } from 'google-tts-api';
 
-const ai = new GoogleGenAI({ apiKey: 'AQ.Ab8RN6I0_4DsJOnuFwRoFWnKb4IpuSkxD-vb0wd8276lZUENdw' });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export default async function handler(req, res) {
   // Enabler CORS untuk Akses Bot WhatsApp & Web
