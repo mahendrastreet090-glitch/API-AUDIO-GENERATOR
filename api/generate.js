@@ -1,6 +1,7 @@
 const { MsEdgeTTS, OUTPUT_FORMAT } = require('ms-edge-tts');
 
 module.exports = async function handler(req, res) {
+  // CORS Header agar bisa diakses dari Web maupun Bot WA
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -22,7 +23,7 @@ module.exports = async function handler(req, res) {
     let optimizedText = text;
     const apiKey = process.env.GEMINI_API_KEY;
 
-    // 1. Gemini merapikan teks & tanda baca sesuai Vibe
+    // 1. Gemini AI: Optimasi Teks & Tanda Baca Sesuai Vibe
     if (apiKey) {
       try {
         const promptText = `Kamu adalah pengarah vokal Bahasa Indonesia.
@@ -56,28 +57,42 @@ Teks Asli: ${text}`;
       }
     }
 
-    // 2. Pemilihan Suara (Pria / Wanita)
+    // 2. Pilih Voice Neural Microsoft (Pria / Wanita)
     const voice = gender === 'pria' ? 'id-ID-ArdiNeural' : 'id-ID-GadisNeural';
 
-    // 3. Penyesuaian Pitch Berdasarkan Vibe
+    // 3. Pengaturan Pitch Berdasarkan Vibe
     let pitch = '+0Hz';
-    if (vibe === 'misterius') pitch = '-10Hz';
-    if (vibe === 'ceria') pitch = '+6Hz';
-    if (vibe === 'sedih') pitch = '-4Hz';
+    if (vibe === 'misterius') pitch = '-12Hz';
+    if (vibe === 'ceria') pitch = '+8Hz';
+    if (vibe === 'sedih') pitch = '-6Hz';
 
     const speedPercent = Math.round((parseFloat(speed) - 1) * 100);
     const rate = `${speedPercent >= 0 ? '+' : ''}${speedPercent}%`;
 
-    // 4. Synthesize Audio Menggunakan ms-edge-tts
+    // 4. Sanitasi & Buat Format SSML
+    const safeText = optimizedText
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='id-ID'>
+      <voice name='${voice}'>
+        <prosody pitch='${pitch}' rate='${rate}'>
+          ${safeText}
+        </prosody>
+      </voice>
+    </speak>`;
+
+    // 5. Generate Stream Audio
     const tts = new MsEdgeTTS();
     await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
 
-    const stream = tts.toStream(optimizedText, { rate, pitch });
-
+    const stream = tts.toStream(ssml);
     const chunks = [];
     for await (const chunk of stream) {
       chunks.push(chunk);
     }
+
     const audioBuffer = Buffer.concat(chunks);
     const base64Audio = audioBuffer.toString('base64');
 
@@ -85,6 +100,7 @@ Teks Asli: ${text}`;
       success: true,
       vibe,
       gender,
+      voiceUsed: voice,
       speed,
       processedText: optimizedText,
       audioUrl: `data:audio/mp3;base64,${base64Audio}`,
