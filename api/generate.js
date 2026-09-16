@@ -1,8 +1,7 @@
-import { GoogleGenAI } from '@google/genai';
-import { getAllAudioBase64 } from 'google-tts-api';
+const tts = require('google-tts-api');
 
-export default async function handler(req, res) {
-  // Enabler CORS untuk Akses Bot WhatsApp & Web
+module.exports = async function handler(req, res) {
+  // Header CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -27,13 +26,12 @@ export default async function handler(req, res) {
     }
 
     let optimizedText = text;
-
-    // 1. Analisis & Refinemen Bahasa oleh Gemini (Jika API Key ada)
     const apiKey = process.env.GEMINI_API_KEY;
+
+    // 1. Minta Gemini mengoptimalkan gaya & dialek teks via Direct REST API
     if (apiKey) {
       try {
-        const ai = new GoogleGenAI({ apiKey });
-        const systemPrompt = `Kamu adalah pakar fonetik dan pengarah vokal Bahasa Indonesia.
+        const promptText = `Kamu adalah pakar fonetik dan pengarah vokal Bahasa Indonesia.
 Tugasmu: Analisis teks input dan sesuaikan ekspresi, intonasi, tanda baca, serta jeda fonetis agar terdengar alami dengan logat Indonesia.
 Aturan Vibe:
 - ceria: Tambahkan tanda seru, intonasi naik dan dinamis.
@@ -47,30 +45,40 @@ Target Vibe: ${vibe}
 Kembalikan HANYA teks hasil optimasi tanpa komentar tambahan.
 Teks Asli: ${text}`;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: systemPrompt,
-        });
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: promptText }] }]
+            })
+          }
+        );
 
-        if (response && response.text) {
-          optimizedText = response.text.trim();
+        if (geminiRes.ok) {
+          const geminiData = await geminiRes.json();
+          const resultText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (resultText) {
+            optimizedText = resultText.trim();
+          }
         }
       } catch (geminiErr) {
-        console.warn('Gemini AI error/fallback to raw text:', geminiErr.message);
-        // Tetap lanjut menggunakan teks asli jika Gemini error
+        console.warn('Gemini API Error (fallback ke teks asli):', geminiErr.message);
       }
     }
 
-    // 2. Generate Audio tanpa batas karakter (memecah teks otomatis jika > 200 karakter)
-    const audioParts = await getAllAudioBase64(optimizedText, {
+    // 2. Olah TTS Audio
+    const isSlow = parseFloat(speed) < 0.9;
+    const audioParts = await tts.getAllAudioBase64(optimizedText, {
       lang: 'id',
-      slow: parseFloat(speed) < 0.9,
+      slow: isSlow,
       host: 'https://translate.google.com',
       timeout: 15000,
       splitPunct: '.,?!;\n'
     });
 
-    // 3. Gabungkan seluruh chunk audio base64 menjadi satu file audio
+    // 3. Gabungkan Chunk Audio
     const audioBuffers = audioParts.map((part) => Buffer.from(part.base64, 'base64'));
     const combinedBuffer = Buffer.concat(audioBuffers);
     const combinedBase64 = combinedBuffer.toString('base64');
@@ -86,11 +94,10 @@ Teks Asli: ${text}`;
     });
 
   } catch (error) {
-    console.error('Error generating audio:', error);
+    console.error('Server execution error:', error);
     return res.status(500).json({
       success: false,
-      error: error.message || 'Terjadi kesalahan pada server.'
+      error: error.message || 'Terjadi kesalahan internal pada server Vercel.'
     });
   }
-}
-
+};
