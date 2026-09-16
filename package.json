@@ -2,11 +2,7 @@
   "name": "id-audio-generator",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "dev": "vercel dev"
-  },
   "dependencies": {
-    "@google/genai": "latest",
     "google-tts-api": "^2.0.2"
   }
 }
