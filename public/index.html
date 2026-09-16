@@ -57,9 +57,9 @@
 
       <audio id="audioPlayer" controls class="w-full mb-4"></audio>
 
-      <a id="downloadBtn" download="audio-indonesia.wav"
+      <a id="downloadBtn" download="audio-indonesia.mp3"
         class="block text-center bg-slate-700 hover:bg-slate-600 text-sm font-medium py-2 rounded-lg transition">
-        Download Audio (.WAV)
+        Download Audio (.MP3)
       </a>
     </div>
   </div>
@@ -88,19 +88,26 @@
           body: JSON.stringify(payload)
         });
 
-        const data = await res.json();
+        const rawText = await res.text();
+        let data;
+        try {
+          data = JSON.parse(rawText);
+        } catch (e) {
+          alert('Error Server (HTTP ' + res.status + '):\n' + rawText.substring(0, 200));
+          return;
+        }
 
-        if (data.success) {
+        if (res.ok && data.success) {
           document.getElementById('processedText').innerText = data.processedText;
           const player = document.getElementById('audioPlayer');
           player.src = data.audioUrl;
           document.getElementById('downloadBtn').href = data.audioUrl;
           resultDiv.classList.remove('hidden');
         } else {
-          alert('Gagal: ' + data.error);
+          alert('Gagal: ' + (data.error || 'Terjadi kesalahan pada server.'));
         }
       } catch (err) {
-        alert('Terjadi kesalahan jaringan.');
+        alert('Gagal terhubung ke server: ' + err.message);
       } finally {
         submitBtn.innerText = 'Proses & Buat Audio';
         submitBtn.disabled = false;
