@@ -1,11 +1,9 @@
 import { GoogleGenAI } from '@google/genai';
-import { getAudioUrl } from 'google-tts-api';
-
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { getAllAudioBase64 } from 'google-tts-api';
 
 export default async function handler(req, res) {
   // Enabler CORS untuk Akses Bot WhatsApp & Web
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader(
@@ -14,8 +12,7 @@ export default async function handler(req, res) {
   );
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
   if (req.method !== 'POST') {
@@ -23,14 +20,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { text, vibe = 'ceria', gender = 'wanita', speed = 1.0 } = req.body;
+    const { text, vibe = 'ceria', gender = 'wanita', speed = 1.0 } = req.body || {};
 
-    if (!text) {
+    if (!text || text.trim() === '') {
       return res.status(400).json({ success: false, error: 'Teks narasi wajib diisi.' });
     }
 
-    // 1. Analisis & Refinemen Bahasa oleh Logika Gemini
-    const systemPrompt = `Kamu adalah pakar fonetik dan pengarah vokal Bahasa Indonesia.
+    let optimizedText = text;
+
+    // 1. Analisis & Refinemen Bahasa oleh Gemini (Jika API Key ada)
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+      try {
+        const ai = new GoogleGenAI({ apiKey });
+        const systemPrompt = `Kamu adalah pakar fonetik dan pengarah vokal Bahasa Indonesia.
 Tugasmu: Analisis teks input dan sesuaikan ekspresi, intonasi, tanda baca, serta jeda fonetis agar terdengar alami dengan logat Indonesia.
 Aturan Vibe:
 - ceria: Tambahkan tanda seru, intonasi naik dan dinamis.
@@ -41,33 +44,36 @@ Aturan Vibe:
 Karakter Suara: ${gender}
 Target Vibe: ${vibe}
 
-Kembalikan HANYA teks hasil optimasi tanpa komentar tambahan.`;
+Kembalikan HANYA teks hasil optimasi tanpa komentar tambahan.
+Teks Asli: ${text}`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        { role: 'user', parts: [{ text: systemPrompt }, { text: `Teks Asli: ${text}` }] }
-      ]
-    });
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: systemPrompt,
+        });
 
-    const optimizedText = response.text || text;
+        if (response && response.text) {
+          optimizedText = response.text.trim();
+        }
+      } catch (geminiErr) {
+        console.warn('Gemini AI error/fallback to raw text:', geminiErr.message);
+        // Tetap lanjut menggunakan teks asli jika Gemini error
+      }
+    }
 
-    // 2. Pemilihan Suara Berdasarkan Kode Bahasa Indonesia
-    // id-ID default untuk aksen & dialek Indonesia
-    const langCode = 'id';
-
-    // 3. Generasi Audio URL
-    const audioUrl = getAudioUrl(optimizedText, {
-      lang: langCode,
+    // 2. Generate Audio tanpa batas karakter (memecah teks otomatis jika > 200 karakter)
+    const audioParts = await getAllAudioBase64(optimizedText, {
+      lang: 'id',
       slow: parseFloat(speed) < 0.9,
       host: 'https://translate.google.com',
-      timeout: 10000,
+      timeout: 15000,
+      splitPunct: '.,?!;\n'
     });
 
-    // Fetched Audio untuk Konversi Buffer Wav/Base64
-    const audioStream = await fetch(audioUrl);
-    const arrayBuffer = await audioStream.arrayBuffer();
-    const base64Audio = Buffer.from(arrayBuffer).toString('base64');
+    // 3. Gabungkan seluruh chunk audio base64 menjadi satu file audio
+    const audioBuffers = audioParts.map((part) => Buffer.from(part.base64, 'base64'));
+    const combinedBuffer = Buffer.concat(audioBuffers);
+    const combinedBase64 = combinedBuffer.toString('base64');
 
     return res.status(200).json({
       success: true,
@@ -75,12 +81,16 @@ Kembalikan HANYA teks hasil optimasi tanpa komentar tambahan.`;
       gender,
       speed,
       processedText: optimizedText,
-      audioUrl: `data:audio/wav;base64,${base64Audio}`,
-      base64: base64Audio
+      audioUrl: `data:audio/mp3;base64,${combinedBase64}`,
+      base64: combinedBase64
     });
 
   } catch (error) {
     console.error('Error generating audio:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Terjadi kesalahan pada server.'
+    });
   }
 }
+
