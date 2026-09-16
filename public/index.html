@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Generator Audio Indonesia - Gemini AI</title>
+  <title>Generator Audio Indonesia AI</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen p-4 flex items-center justify-center">
 
   <div class="w-full max-w-2xl bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-2xl">
     <h1 class="text-2xl font-bold mb-2 text-emerald-400">Audio Generator Logat Indonesia</h1>
-    <p class="text-sm text-slate-400 mb-6">Menganalisis ekspresi & dialek Indonesia menggunakan logika Gemini AI.</p>
+    <p class="text-sm text-slate-400 mb-6">Menggunakan logika Gemini AI & Neural Voice Indonesia.</p>
 
     <form id="ttsForm" class="space-y-4">
       <div>
@@ -33,8 +33,8 @@
         <div>
           <label class="block text-sm font-medium mb-1">Karakter Suara</label>
           <select id="gender" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm focus:border-emerald-500">
-            <option value="wanita">Wanita</option>
-            <option value="pria">Pria</option>
+            <option value="wanita">Wanita (Gadis)</option>
+            <option value="pria">Pria (Ardi)</option>
           </select>
         </div>
 
@@ -52,7 +52,7 @@
     </form>
 
     <div id="result" class="mt-6 hidden border-t border-slate-700 pt-6">
-      <h2 class="text-sm font-semibold text-slate-300 mb-2">Hasil Analisis Teks Gemini:</h2>
+      <h2 class="text-sm font-semibold text-slate-300 mb-2">Hasil Naskah Disesuaikan Gemini:</h2>
       <p id="processedText" class="text-xs italic bg-slate-900 p-3 rounded mb-4 text-slate-400"></p>
 
       <audio id="audioPlayer" controls class="w-full mb-4"></audio>
@@ -88,23 +88,19 @@
           body: JSON.stringify(payload)
         });
 
-        const rawText = await res.text();
-        let data;
-        try {
-          data = JSON.parse(rawText);
-        } catch (e) {
-          alert('Error Server (HTTP ' + res.status + '):\n' + rawText.substring(0, 200));
-          return;
-        }
+        const data = await res.json();
 
         if (res.ok && data.success) {
           document.getElementById('processedText').innerText = data.processedText;
+          
           const player = document.getElementById('audioPlayer');
           player.src = data.audioUrl;
+          player.load();
+          
           document.getElementById('downloadBtn').href = data.audioUrl;
           resultDiv.classList.remove('hidden');
         } else {
-          alert('Gagal: ' + (data.error || 'Terjadi kesalahan pada server.'));
+          alert('Gagal: ' + (data.error || 'Terjadi kesalahan server.'));
         }
       } catch (err) {
         alert('Gagal terhubung ke server: ' + err.message);
