@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "google-tts-api": "^2.0.2"
+    "edge-tts": "^1.0.3"
   }
 }
